@@ -1,0 +1,9 @@
+# dsh-message-cite bundle patch.
+#
+# One plugin row: the host half (exports ".") serves the
+# `/dsh-message-cite/api/*` routes and injects cited messages into the model
+# request; the `dsh.client` declaration in package.json makes the browser half
+# (exports "./client") register the `@` source and the transcript chip.
+- insert:
+    - id: dsh-message-cite
+      name: 'dsh-message-cite'

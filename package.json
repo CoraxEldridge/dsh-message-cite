@@ -1,0 +1,55 @@
+{
+  "name": "dsh-message-cite",
+  "version": "0.1.0",
+  "description": "Cite one specific message from another DSH conversation: search prior messages from the @ menu, insert an atomic chip, and inject the quoted text as untrusted background context. 引用其他对话里的某一条具体消息。",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "citation",
+    "quote",
+    "reference",
+    "session",
+    "conversation"
+  ],
+  "license": "MIT",
+  "author": "CoraxEldridge",
+  "type": "module",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "cordis.patch.yml",
+    "client.js",
+    "host/*.js",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CoraxEldridge/dsh-message-cite.git"
+  },
+  "homepage": "https://github.com/CoraxEldridge/dsh-message-cite#readme",
+  "bugs": {
+    "url": "https://github.com/CoraxEldridge/dsh-message-cite/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true
+    }
+  }
+}
