@@ -1,5 +1,7 @@
 # dsh-message-cite
 
+[![npm](https://img.shields.io/npm/v/dsh-message-cite.svg)](https://www.npmjs.com/package/dsh-message-cite) [![GitHub](https://img.shields.io/badge/github-CoraxEldridge%2Fdsh-message-cite-24292f.svg)](https://github.com/CoraxEldridge/dsh-message-cite)
+
 在 DSH 输入框里打 `@`，**引用其他对话里的某一条具体消息**；发送时把那条消息的原文作为「不可信背景上下文」注入当前对话。
 
 > **English** — A DeepSeek Harness plugin that cites one specific message from another conversation. Type `@` in the composer, search prior messages, pick one: the draft gets an atomic chip and the model receives the quoted text as untrusted background. Works with `openAt: "never"` deployments (no SQLite FTS needed) by keeping a bounded in-memory index.
@@ -88,17 +90,23 @@ DSH 桌面版内置的 `@` 已经能引用**整段对话**（按标题匹配，�
 
 ## 安装 / 卸载
 
-已以 `link:` 方式安装进 `desktop` profile（`~/.dsh/profiles/desktop`），并加进了 `dsh.profile.bundles`。
+已发布到 npm：[`dsh-message-cite`](https://www.npmjs.com/package/dsh-message-cite)，源码在 [GitHub](https://github.com/CoraxEldridge/dsh-message-cite)。
 
 ```bash
-# 重新安装（改了代码后让 Host 重新加载）
-dsh plugin --profile desktop add link:C:/Users/Baich/DSH-Workspaces/Citation/plugins/dsh-message-cite
+# 从 npm 安装到 desktop profile
+dsh plugin --profile desktop add dsh-message-cite
 
 # 卸载
 dsh plugin --profile desktop remove dsh-message-cite
 ```
 
-改了 Host 代码后，也可以在「设置 → 插件」里把这个插件关掉再打开，让它重新加载。
+本机当前用的是 `link:` 安装（方便改代码就地生效）：
+
+```bash
+dsh plugin --profile desktop add link:C:/Users/Baich/DSH-Workspaces/Citation/plugins/dsh-message-cite
+```
+
+改完 Host 代码后，也可以在「设置 → 插件」里把它关掉再打开，让 Host 重新加载；客户端 bundle 会跟着热更新。
 
 ## 已知限制
 
