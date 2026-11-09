@@ -104,11 +104,11 @@ export function registerRoutes(ctx, index) {
   }), 'GET')
 
   // The browser half reports here after it registers its `@` source, so a Host
-  // side check can tell "not loaded yet" from "loaded and broken".
+  // side check can tell "not loaded yet" from "loaded and broken". The payload
+  // intentionally carries no version: a hand-maintained constant would drift.
   route('client-ready', async (args) => {
     state.client = {
       at: new Date().toISOString(),
-      version: typeof args.version === 'string' ? args.version : '',
       registered: typeof args.registered === 'number' ? args.registered : null,
     }
     return {}

@@ -186,7 +186,7 @@ window.__ModuleLoader__.load({
         void fetch(`${API}client-ready`, {
           method: 'POST',
           headers: { 'content-type': 'application/json', [GUARD_HEADER]: '1' },
-          body: JSON.stringify({ version: '0.1.0', registered: 1 }),
+          body: JSON.stringify({ registered: 1 }),
           credentials: 'same-origin',
           keepalive: true,
         }).catch(() => {})
