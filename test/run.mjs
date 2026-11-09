@@ -16,6 +16,7 @@ import {
 } from '../host/uri.js'
 import { boundQuoteText, readCitedMessage, singleLine } from '../host/search.js'
 import { MessageIndex } from '../host/indexer.js'
+import { createConversationTool } from '../host/tool.js'
 import { registerMessageCiteContext } from '../host/context.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -413,6 +414,150 @@ await check('client source passes quoted multi-word queries and drops failures',
     throw new Error('offline')
   }
   assert.equal((await registeredSources[0].candidates({ sessionId: 'me' }, { query: 'x', quoted: false })).length, 0)
+})
+
+// ---------------------------------------------------------------- model tool
+
+const TOOL_SESSIONS = [
+  { header: { id: 's-w1', cwd: 'W', createdAt: 4 }, live: false },
+  { header: { id: 's-w2', cwd: 'W', createdAt: 3 }, live: false },
+  { header: { id: 's-x', cwd: 'X', createdAt: 2 }, live: false },
+  { header: { id: 's-caller', cwd: 'W', createdAt: 5 }, live: false },
+]
+
+function fakeToolSessionQuery() {
+  return {
+    async listSessions() {
+      return TOOL_SESSIONS
+    },
+    async readSurface(id) {
+      const cwd = TOOL_SESSIONS.find((record) => record.header.id === id)?.header.cwd
+      return {
+        session: { id, cwd },
+        events: [
+          {
+            seq: 1,
+            time: 100,
+            type: 'user/message',
+            data: { source: { kind: 'user' }, content: [{ type: 'text', text: `开场白 ${id}` }] },
+          },
+          {
+            seq: 2,
+            time: 200,
+            type: 'assistant/message',
+            data: { message: { content: [{ type: 'text', text: `结论 ${id}：三体文明的黑暗森林` }] } },
+          },
+          {
+            seq: 3,
+            time: 300,
+            type: 'user/message',
+            data: { source: { kind: 'user' }, content: [{ type: 'text', text: '补充一句' }] },
+          },
+        ],
+      }
+    },
+    async readTitleSnapshots(ids) {
+      return ids.map((sessionId) => ({ sessionId, value: { title: `标题-${sessionId}` } }))
+    },
+    async readEvent({ sessionId, seq }) {
+      return {
+        session: { id: sessionId, cwd: 'W' },
+        target: { seq },
+        startSeq: Math.max(0, seq - 1),
+        endSeq: seq + 1,
+        events: [
+          {
+            seq: Math.max(0, seq - 1),
+            time: 900,
+            type: 'assistant/message',
+            data: { message: { content: [{ type: 'text', text: '前一条' }] } },
+          },
+          {
+            seq,
+            time: 1000,
+            type: 'user/message',
+            data: { source: { kind: 'user' }, content: [{ type: 'text', text: '目标消息原文' }] },
+          },
+          {
+            seq: seq + 1,
+            time: 1100,
+            type: 'assistant/message',
+            data: { message: { content: [{ type: 'text', text: '后一条' }] } },
+          },
+        ],
+      }
+    },
+  }
+}
+
+function toolFixture() {
+  const sessionQuery = fakeToolSessionQuery()
+  const index = new MessageIndex(sessionQuery)
+  const ctx = {
+    sessionQuery,
+    get(name) {
+      if (name === 'workingDirectory') return { get: () => 'W' }
+      return undefined
+    },
+  }
+  const tool = createConversationTool(ctx, index)
+  const exec = { agent: { id: 's-caller', session: { id: 's-caller', header: { cwd: 'W' } } } }
+  return { tool, exec, index }
+}
+
+await check('tool list shows only this workspace and never the caller', async () => {
+  const { tool, exec } = toolFixture()
+  const result = await tool.execute({ action: 'list' }, exec)
+  assert.match(result.summary, /s-w1/)
+  assert.match(result.summary, /s-w2/)
+  assert.doesNotMatch(result.summary, /s-x/)
+  assert.doesNotMatch(result.summary, /s-caller/)
+})
+
+await check('tool search is scoped to the workspace and reports the seq to read', async () => {
+  const { tool, exec } = toolFixture()
+  const result = await tool.execute({ action: 'search', query: '三体' }, exec)
+  assert.match(result.summary, /session=s-w1/)
+  assert.match(result.summary, /seq=2/)
+  assert.match(result.summary, /已索引/)
+  assert.doesNotMatch(result.summary, /s-x/)
+})
+
+await check('tool read returns the message with its neighbours', async () => {
+  const { tool, exec } = toolFixture()
+  const result = await tool.execute({ action: 'read', session: 's-w1', seq: 2, before: 1, after: 1 }, exec)
+  assert.match(result.summary, /结论 s-w1：三体文明的黑暗森林/)
+  assert.match(result.summary, /→ 【助手】#2/)
+  assert.match(result.summary, /开场白 s-w1/)
+  assert.match(result.summary, /补充一句/)
+})
+
+await check('tool read accepts a unique session-id prefix and rejects an ambiguous one', async () => {
+  const { tool, exec } = toolFixture()
+  const result = await tool.execute({ action: 'read', session: 's-w1', seq: 2 }, exec)
+  assert.match(result.summary, /session=s-w1/)
+  await assert.rejects(() => tool.execute({ action: 'read', session: 's-w', seq: 2 }, exec), /匹配到 2 个会话/)
+})
+
+await check('tool search prints the full session id so read can reuse it', async () => {
+  const { tool, exec } = toolFixture()
+  const result = await tool.execute({ action: 'search', query: '三体' }, exec)
+  assert.match(result.summary, /session=s-w1\b/)
+  assert.match(result.summary, /seq=2\b/)
+  assert.doesNotMatch(result.summary, /s-w1…/)
+})
+
+await check('tool read refuses another workspace and the caller itself', async () => {
+  const { tool, exec } = toolFixture()
+  await assert.rejects(() => tool.execute({ action: 'read', session: 's-x', seq: 1 }, exec), /不属于当前工作区/)
+  await assert.rejects(() => tool.execute({ action: 'read', session: 's-caller', seq: 1 }, exec), /当前对话本身/)
+  await assert.rejects(() => tool.execute({ action: 'read', session: 's-missing', seq: 1 }, exec), /找不到会话/)
+})
+
+await check('tool rejects a missing query and an unknown action', async () => {
+  const { tool, exec } = toolFixture()
+  await assert.rejects(() => tool.execute({ action: 'search' }, exec), /需要 "query"/)
+  await assert.rejects(() => tool.execute({ action: 'nope' }, exec), /unknown action/)
 })
 
 console.log(`\n${checks} checks passed`)

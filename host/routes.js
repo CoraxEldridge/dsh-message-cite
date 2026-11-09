@@ -116,7 +116,7 @@ export function registerRoutes(ctx, index) {
 
   // Diagnostics: force a full index build and report the cost. Never used by the UI.
   route('scan', async () => {
-    const summary = await index.scanAll()
+    const summary = await index.scanAll({ limit: Number.MAX_SAFE_INTEGER })
     return { ...summary, indexed: index.size }
   })
 

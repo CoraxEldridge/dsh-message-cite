@@ -52,11 +52,49 @@ export class MessageIndex {
     const records = await this.sessionQuery.listSessions()
     // Child (subagent) sessions carry delegated work, not a conversation worth
     // citing from the composer; the requested parent is the citable one.
-    this.targetList = (records ?? [])
-      .filter((record) => record?.header?.id !== undefined && record.header.parentSession === undefined)
-      .slice(0, this.maxSessions)
+    this.targetList = (records ?? []).filter(
+      (record) => record?.header?.id !== undefined && record.header.parentSession === undefined,
+    )
     this.targetsAt = now
     return this.targetList
+  }
+
+  /**
+   * List this workspace's sessions, newest first.
+   * @param {string} cwd - exact working-directory identity.
+   * @returns {Promise<Array<object>>} matching session records.
+   */
+  async workspaceRecords(cwd) {
+    const targets = await this.targets()
+    return targets.filter((record) => record.header.cwd === cwd)
+  }
+
+  /**
+   * Index a few not-yet-read sessions of one workspace.
+   * @param {string} cwd - exact working-directory identity.
+   * @param {{count?: number, budgetMs?: number}} [options] - bounds for this call.
+   * @returns {Promise<{scanned: number, indexed: number, total: number}>} coverage after the scan.
+   */
+  async ensureWorkspace(cwd, options = {}) {
+    const count = positiveInteger(options.count, 6)
+    const budgetMs = Number.isFinite(options.budgetMs) ? options.budgetMs : 1200
+    const startedAt = Date.now()
+    let records = []
+    try {
+      records = await this.workspaceRecords(cwd)
+    } catch {
+      return { scanned: 0, indexed: 0, total: 0 }
+    }
+    let scanned = 0
+    for (const record of records) {
+      if (scanned >= count || Date.now() - startedAt > budgetMs) break
+      if (this.entries.has(record.header.id)) continue
+      await this.scanSession(record)
+      scanned += 1
+      await yieldToEventLoop()
+    }
+    const indexed = records.filter((record) => this.entries.has(record.header.id)).length
+    return { scanned, indexed, total: records.length }
   }
 
   /**
@@ -88,11 +126,13 @@ export class MessageIndex {
         role: projected.role,
         time: event.time,
         text,
+        truncated: projected.text.length > this.maxTextChars,
       })
     }
     const retained = messages.slice(-this.maxMessages)
     const firstUser = retained.find((message) => message.role === 'user')
     this.entries.set(sessionId, {
+      cwd: record.header.cwd,
       createdAt: record.header.createdAt ?? 0,
       live: record.live === true,
       scannedAt: Date.now(),
@@ -134,17 +174,18 @@ export class MessageIndex {
   }
 
   /**
-   * Scan every target session in the background.
-   * @param {{signal?: AbortSignal, onProgress?: (done: number, total: number) => void}} [options] - scan controls.
+   * Scan target sessions in the background.
+   * @param {{signal?: AbortSignal, limit?: number, onProgress?: (done: number, total: number) => void}} [options] - scan controls.
    * @returns {Promise<{scanned: number, total: number, elapsedMs: number}>} summary.
    */
   async scanAll(options = {}) {
     if (this.scanning) return { scanned: 0, total: 0, elapsedMs: 0, skipped: true }
     this.scanning = true
     const startedAt = Date.now()
+    const limit = Number.isFinite(options.limit) ? Math.max(0, Math.trunc(options.limit)) : this.maxSessions
     let scanned = 0
     try {
-      const targets = await this.targets(true)
+      const targets = (await this.targets(true)).slice(0, limit)
       for (const record of targets) {
         if (options.signal?.aborted === true) break
         if (this.entries.has(record.header.id)) continue
@@ -161,7 +202,7 @@ export class MessageIndex {
 
   /**
    * Search indexed messages.
-   * @param {{query: string, excludeSessionId?: string, limit?: number}} request - search request.
+   * @param {{query: string, excludeSessionId?: string, cwd?: string, limit?: number}} request - search request.
    * @returns {Promise<Array<object>>} ranked hits.
    */
   async search(request) {
@@ -176,6 +217,7 @@ export class MessageIndex {
     const rows = []
     for (const [sessionId, entry] of this.entries) {
       if (sessionId === request.excludeSessionId) continue
+      if (request.cwd !== undefined && entry.cwd !== request.cwd) continue
       for (const message of entry.messages) {
         const haystack = message.text.toLocaleLowerCase()
         let score = 0
@@ -207,7 +249,7 @@ export class MessageIndex {
 
   /**
    * Newest messages across indexed sessions.
-   * @param {{excludeSessionId?: string, limit?: number}} request - request.
+   * @param {{excludeSessionId?: string, cwd?: string, limit?: number}} request - request.
    * @returns {Promise<Array<object>>} newest hits first.
    */
   async recent(request) {
@@ -216,6 +258,7 @@ export class MessageIndex {
     const rows = []
     for (const [sessionId, entry] of this.entries) {
       if (sessionId === request.excludeSessionId) continue
+      if (request.cwd !== undefined && entry.cwd !== request.cwd) continue
       for (const message of entry.messages.slice(-4)) {
         rows.push({
           sessionId,
