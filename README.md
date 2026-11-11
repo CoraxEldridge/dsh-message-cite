@@ -100,7 +100,7 @@ DSH 桌面版内置的 `@` 已经能引用**整段对话**（按标题匹配，�
 | `host/routes.js` | `/dsh-message-cite/api/*` 的 JSON 路由 |
 | `host/uri.js` | `dsh-message:` URI 与 `@[label](dsh-message:…)` mention 编解码 |
 | `client.js` | Web 端：`@` 候选源、草稿 chip、消息渲染 |
-| `test/run.mjs` | 不依赖 Harness 的自检（21 项） |
+| `test/run.mjs` | 不依赖 Harness 的自检（22 项） |
 
 ## 接口
 
