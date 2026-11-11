@@ -25,6 +25,7 @@
     "cordis.patch.yml",
     "client.js",
     "host/*.js",
+    "assets/*.png",
     "README.md",
     "LICENSE"
   ],
