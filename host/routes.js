@@ -148,13 +148,32 @@ function present(hit) {
 
 /**
  * Build a short chip label: the session title plus a head of the message text.
+ *
+ * A session's title is usually derived from its first user message, so citing
+ * that message makes the snippet repeat the title verbatim. When the snippet
+ * adds nothing new, the label is the title alone instead of "标题 · 标题…".
  * @param {{title: string, snippet: string}} hit - one hit.
  * @returns {string} at most 36 characters.
  */
-function buildLabel(hit) {
+export function buildLabel(hit) {
   const title = hit.title === '' ? '未命名对话' : hit.title
-  const head = singleLine(hit.snippet, 14)
-  const joined = head === '' ? title : `${title} · ${head}`
+  const head = singleLine(hit.snippet, 18)
+  const joined = head === '' || containsLabel(title, head) ? title : `${title} · ${head}`
   const characters = Array.from(joined)
   return characters.length <= 36 ? joined : `${characters.slice(0, 35).join('')}…`
+}
+
+/** Whether the snippet is already part of the title, ignoring spacing and ellipses. */
+function containsLabel(title, head) {
+  const titleKey = normalizeLabel(title)
+  const headKey = normalizeLabel(head)
+  if (titleKey === '' || headKey === '') return true
+  return titleKey.includes(headKey)
+}
+
+function normalizeLabel(value) {
+  return String(value)
+    .replace(/\s+/gu, '')
+    .replace(/[…．.]+$/gu, '')
+    .toLocaleLowerCase()
 }

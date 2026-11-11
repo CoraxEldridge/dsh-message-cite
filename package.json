@@ -1,6 +1,6 @@
 {
   "name": "dsh-message-cite",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Cite one specific message from another DSH conversation: search prior messages from the @ menu, insert an atomic chip, and inject the quoted text as untrusted background context. 引用其他对话里的某一条具体消息。",
   "keywords": [
     "dsh",

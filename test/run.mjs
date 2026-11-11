@@ -17,6 +17,7 @@ import {
 import { boundQuoteText, readCitedMessage, singleLine } from '../host/search.js'
 import { MessageIndex } from '../host/indexer.js'
 import { createConversationTool } from '../host/tool.js'
+import { buildLabel } from '../host/routes.js'
 import { registerMessageCiteContext } from '../host/context.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -558,6 +559,21 @@ await check('tool rejects a missing query and an unknown action', async () => {
   const { tool, exec } = toolFixture()
   await assert.rejects(() => tool.execute({ action: 'search' }, exec), /需要 "query"/)
   await assert.rejects(() => tool.execute({ action: 'nope' }, exec), /unknown action/)
+})
+
+await check('chip label does not repeat the title as the snippet', () => {
+  const title = '我想要一个可以引用其他对话的dsh插件'
+  assert.equal(buildLabel({ title, snippet: '我想要一个可以引用其他对话…' }), title)
+  assert.equal(buildLabel({ title, snippet: '我想要一个可以引用其他对话的dsh插件' }), title)
+  // A different message still shows both halves (the joined label is capped).
+  const mixed = buildLabel({ title, snippet: '客户端产物按文件元数据算模块版本' })
+  assert.ok(mixed.startsWith(`${title} · 客户端产物`))
+  assert.ok(mixed.endsWith('…'))
+  assert.ok(Array.from(mixed).length <= 36)
+  // Untitled sessions keep the snippet.
+  assert.equal(buildLabel({ title: '', snippet: '开场白' }), '未命名对话 · 开场白')
+  // Everything is capped at 36 characters.
+  assert.ok(Array.from(buildLabel({ title: '标题'.repeat(30), snippet: '' })).length <= 36)
 })
 
 console.log(`\n${checks} checks passed`)
